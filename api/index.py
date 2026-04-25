@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 import requests
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 
 
 app = FastAPI(title="Streaming Nova Manga API", version="1.0.0")
@@ -81,20 +81,78 @@ def _as_sorted_list(results: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [results[k] for k in sorted(results.keys(), key=lambda x: int(x))]
 
 
-@app.get("/")
-def root() -> Dict[str, Any]:
-    return {
-        "message": "Streaming Nova API online",
-        "supported_sources": list(SOURCE_URLS.keys()),
-        "endpoints": [
-            "/search",
-            "/chapters",
-            "/read/chapter",
-            "/proxy-image",
-            "/health",
-            "/status",
-        ],
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
+    return """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nova Manga API</title>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; font-family: Inter, Segoe UI, Arial, sans-serif;
+      background: radial-gradient(circle at top, #1a1a2e, #0b0b17 60%);
+      color: #f5f7ff;
+      min-height: 100vh;
+      display: grid; place-items: center;
     }
+    .card {
+      width: min(920px, 94vw);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+      overflow: hidden;
+    }
+    .head { padding: 20px 22px 10px; }
+    .badge {
+      display: inline-block; padding: 6px 10px; border-radius: 999px;
+      background: linear-gradient(90deg, #7c3aed, #ec4899);
+      font-size: 12px; font-weight: 700;
+    }
+    h1 { margin: 12px 0 8px; font-size: clamp(24px, 4vw, 38px); }
+    p { margin: 0; opacity: 0.9; }
+    .gif { width: 100%; display: block; border-top: 1px solid rgba(255,255,255,0.1); border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap: 10px; padding: 16px; }
+    .endpoint {
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 14px;
+    }
+    a { color: #93c5fd; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .footer { padding: 0 16px 16px; font-size: 13px; opacity: 0.84; }
+  </style>
+</head>
+<body>
+  <section class="card">
+    <div class="head">
+      <span class="badge">NOVA CORPORATION</span>
+      <h1>API by Owais</h1>
+      <p>Personal usage • Streaming Nova manga/manhwa reader backend.</p>
+    </div>
+    <img class="gif" src="https://media.tenor.com/pLG6mQ2Mci0AAAAd/ippo-hajime-no-ippo.gif" alt="Anime running gif" />
+    <div class="grid">
+      <div class="endpoint">GET <a href="/api/health">/api/health</a></div>
+      <div class="endpoint">GET /api/search?title=...&source=...</div>
+      <div class="endpoint">GET /api/chapters?id=...&source=...</div>
+      <div class="endpoint">GET /api/read/chapter?chapter_id=...&source=...</div>
+      <div class="endpoint">GET /api/proxy-image?url=...&hd=...</div>
+      <div class="endpoint">GET <a href="/api/status">/api/status</a></div>
+    </div>
+    <div class="footer">
+      GIF inspiration: <a href="https://www.pinterest.com/ideas/tuff-anime-gifs/940665096801/" target="_blank" rel="noopener noreferrer">Pinterest anime gifs</a>.
+    </div>
+  </section>
+</body>
+</html>
+"""
 
 
 @app.get("/health")
