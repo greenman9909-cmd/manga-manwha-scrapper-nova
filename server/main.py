@@ -331,6 +331,21 @@ async def chapters_endpoint(
         return {"error": str(e)}
 
 
+@app.get("/read/chapter")
+async def read_chapter_endpoint(
+    chapter_id: str = Query(..., description="Chapter ID"),
+    source: str = Query(..., description="Source of the comic"),
+):
+    """
+    Get page image URLs for a chapter (web reader mode).
+    """
+    try:
+        pages = scraper.get_chapter_pages(chapter_id, source)
+        return pages
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/proxy-image")
 async def proxy_image_endpoint(
     url: str = Query(..., description="URL of the image to proxy"), 

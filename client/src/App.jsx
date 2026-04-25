@@ -20,6 +20,7 @@ import SearchForm from "./components/SearchForm";
 
 function App() {
   const API_url = "/api";
+  const viewerOnlyMode = true;
   // Theme state - persists in localStorage
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("theme");
@@ -57,6 +58,13 @@ function App() {
   const [taskStatuses, setTaskStatuses] = useState({});
   const [downloadingFiles, setDownloadingFiles] = useState(new Set());
   const [downloadSuccess, setDownloadSuccess] = useState("");
+  const [viewer, setViewer] = useState({
+    open: false,
+    loading: false,
+    error: "",
+    title: "",
+    pages: [],
+  });
 
   // Format selection states
   const [selectedFormat, setSelectedFormat] = useState({});
@@ -527,6 +535,41 @@ function App() {
     }
   };
 
+  const openChapterViewer = async (sourceId, chapterId, chapterNumber, comicTitle) => {
+    setViewer({
+      open: true,
+      loading: true,
+      error: "",
+      title: `${comicTitle} - Ch ${chapterNumber}`,
+      pages: [],
+    });
+
+    try {
+      const res = await fetch(
+        `${API_url}/read/chapter?chapter_id=${encodeURIComponent(chapterId)}&source=${sourceId}`
+      );
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to load chapter pages");
+      }
+
+      const pages = (data.pages || []).map((p) => {
+        const url = encodeURIComponent(p.url || "");
+        const referer = encodeURIComponent(p.referer || "");
+        return `${API_url}/proxy-image?url=${url}&hd=${referer}`;
+      });
+
+      setViewer((prev) => ({ ...prev, loading: false, pages }));
+    } catch (error) {
+      setViewer((prev) => ({
+        ...prev,
+        loading: false,
+        error: error.message || "Failed to load chapter",
+      }));
+    }
+  };
+
   return (
     <div className="min-h-screen transition-colors duration-300 bg-gradient-to-br from-white via-pink-100 to-purple-100 dark:from-[#0d0c1b] dark:via-[#1a152b] dark:to-[#2d1b4d] text-gray-900 dark:text-[#f4f4ff] relative">
       <NotificationContainer>
@@ -544,13 +587,15 @@ function App() {
         />
       </NotificationContainer>
 
-      <ActiveTasksPopup
-        activeTasks={activeTasks}
-        taskStatuses={taskStatuses}
-        downloadingFiles={downloadingFiles}
-        getTaskStatusDisplay={getTaskStatusDisplay}
-        onCancelTask={cancelTask}
-      />
+      {!viewerOnlyMode && (
+        <ActiveTasksPopup
+          activeTasks={activeTasks}
+          taskStatuses={taskStatuses}
+          downloadingFiles={downloadingFiles}
+          getTaskStatusDisplay={getTaskStatusDisplay}
+          onCancelTask={cancelTask}
+        />
+      )}
 
       <ThemeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
 
@@ -865,17 +910,21 @@ function App() {
                                                 </h4>
                                                 <div className="flex flex-wrap gap-1 sm:gap-2">
                                                   {chapters.map((chData) => (
-                                                    <button
-                                                      key={chData.id}
-                                                      onClick={() => toggleChapterSelection(comicKey, chData.id)}
-                                                      className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm transition-colors focus:outline-none cursor-pointer ${
-                                                        selectedChapters[comicKey]?.includes(chData.id)
-                                                          ? "bg-pink-500 text-white dark:bg-violet-500"
-                                                          : "bg-gray-200 dark:bg-[#2e2b40] text-gray-800 dark:text-gray-300 hover:bg-pink-100 dark:hover:bg-violet-600"
-                                                      }`}
-                                                    >
-                                                      {`Ch ${chData.chapter}`}
-                                                    </button>
+                                                    <div key={chData.id} className="flex items-center gap-1">
+                                                      <button
+                                                        onClick={() =>
+                                                          openChapterViewer(
+                                                            sourceId,
+                                                            chData.id,
+                                                            chData.chapter,
+                                                            comic.title?.en || Object.values(comic.title || {})[0]
+                                                          )
+                                                        }
+                                                        className="px-2 py-1 rounded-md text-xs sm:text-sm bg-blue-500 text-white hover:opacity-90 transition-opacity cursor-pointer"
+                                                      >
+                                                        {`Read Ch ${chData.chapter}`}
+                                                      </button>
+                                                    </div>
                                                   ))}
                                                 </div>
                                               </div>
@@ -883,54 +932,56 @@ function App() {
                                           </div>
 
                                           {/* Chapter action buttons */}
-                                          <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-2">
-                                            <button
-                                              onClick={() => selectAllChapters(comicKey)}
-                                              className="px-2 sm:px-3 py-1 rounded-md bg-pink-500 rounded-r-none text-white dark:bg-violet-500 hover:opacity-90 cursor-pointer text-xs sm:text-base"
-                                            >
-                                              Select All
-                                            </button>
-                                            <div className="flex">
+                                          {!viewerOnlyMode && (
+                                            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-2">
                                               <button
-                                                onClick={() =>
-                                                  handleDownload(
-                                                    comic.id,
-                                                    sourceId,
-                                                    comic.title?.en || Object.values(comic.title || {})[0],
-                                                    selectedFormat[comicKey] || "pdf"
-                                                  )
-                                                }
-                                                disabled={
-                                                  isDownloading ||
-                                                  !selectedChapters[comicKey]?.length
-                                                }
-                                                className={`px-2 sm:px-3 py-1 rounded-l-md border-r-0 cursor-pointer text-xs sm:text-base ${
-                                                  isDownloading ||
-                                                  !selectedChapters[comicKey]?.length
-                                                    ? "bg-gray-400 cursor-not-allowed"
-                                                    : "bg-green-500 hover:opacity-90"
-                                                } text-white`}
+                                                onClick={() => selectAllChapters(comicKey)}
+                                                className="px-2 sm:px-3 py-1 rounded-md bg-pink-500 rounded-r-none text-white dark:bg-violet-500 hover:opacity-90 cursor-pointer text-xs sm:text-base"
                                               >
-                                                {isDownloading ? "Starting..." : "Download"}
+                                                Select All
                                               </button>
-                                              <select
-                                                value={selectedFormat[comicKey] || "pdf"}
-                                                onChange={(e) =>
-                                                  setSelectedFormat((prev) => ({
-                                                    ...prev,
-                                                    [comicKey]: e.target.value,
-                                                  }))
-                                                }
-                                                className="px-2 py-1 rounded-r-md rounded-l-none border border-l-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2e2b40] text-gray-800 dark:text-gray-200 focus:outline-none text-xs sm:text-base"
-                                                style={{ minWidth: 70 }}
-                                              >
-                                                <option value="pdf">PDF</option>
-                                                <option value="cbz">CBZ</option>
-                                                <option value="cbr">CBR</option>
-                                                <option value="epub">ePUB</option>
-                                              </select>
+                                              <div className="flex">
+                                                <button
+                                                  onClick={() =>
+                                                    handleDownload(
+                                                      comic.id,
+                                                      sourceId,
+                                                      comic.title?.en || Object.values(comic.title || {})[0],
+                                                      selectedFormat[comicKey] || "pdf"
+                                                    )
+                                                  }
+                                                  disabled={
+                                                    isDownloading ||
+                                                    !selectedChapters[comicKey]?.length
+                                                  }
+                                                  className={`px-2 sm:px-3 py-1 rounded-l-md border-r-0 cursor-pointer text-xs sm:text-base ${
+                                                    isDownloading ||
+                                                    !selectedChapters[comicKey]?.length
+                                                      ? "bg-gray-400 cursor-not-allowed"
+                                                      : "bg-green-500 hover:opacity-90"
+                                                  } text-white`}
+                                                >
+                                                  {isDownloading ? "Starting..." : "Download"}
+                                                </button>
+                                                <select
+                                                  value={selectedFormat[comicKey] || "pdf"}
+                                                  onChange={(e) =>
+                                                    setSelectedFormat((prev) => ({
+                                                      ...prev,
+                                                      [comicKey]: e.target.value,
+                                                    }))
+                                                  }
+                                                  className="px-2 py-1 rounded-r-md rounded-l-none border border-l-0 border-gray-300 dark:border-gray-600 bg-white dark:bg-[#2e2b40] text-gray-800 dark:text-gray-200 focus:outline-none text-xs sm:text-base"
+                                                  style={{ minWidth: 70 }}
+                                                >
+                                                  <option value="pdf">PDF</option>
+                                                  <option value="cbz">CBZ</option>
+                                                  <option value="cbr">CBR</option>
+                                                  <option value="epub">ePUB</option>
+                                                </select>
+                                              </div>
                                             </div>
-                                          </div>
+                                          )}
                                         </div>
                                       )}
                                     </motion.div>
@@ -996,6 +1047,53 @@ function App() {
                 </button>
               </div>
               <HealthStatus />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {viewer.open && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/85 overflow-y-auto"
+          >
+            <div className="max-w-5xl mx-auto p-4">
+              <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-sm border border-white/10 rounded-lg p-3 mb-4 flex items-center justify-between">
+                <p className="text-white font-semibold text-sm sm:text-base">{viewer.title}</p>
+                <button
+                  onClick={() =>
+                    setViewer({ open: false, loading: false, error: "", title: "", pages: [] })
+                  }
+                  className="px-3 py-1 rounded-md bg-red-500 text-white text-sm hover:opacity-90"
+                >
+                  Close
+                </button>
+              </div>
+
+              {viewer.loading && (
+                <div className="text-center text-white py-10">Loading chapter pages...</div>
+              )}
+              {viewer.error && !viewer.loading && (
+                <div className="text-center text-red-300 py-10">{viewer.error}</div>
+              )}
+              {!viewer.loading && !viewer.error && viewer.pages.length === 0 && (
+                <div className="text-center text-gray-300 py-10">No pages found.</div>
+              )}
+
+              {!viewer.loading &&
+                !viewer.error &&
+                viewer.pages.map((img, idx) => (
+                  <img
+                    key={`${img}_${idx}`}
+                    src={img}
+                    alt={`Page ${idx + 1}`}
+                    className="w-full h-auto rounded mb-3 bg-black"
+                    loading="lazy"
+                  />
+                ))}
             </div>
           </motion.div>
         )}

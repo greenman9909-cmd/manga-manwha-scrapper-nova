@@ -18,6 +18,18 @@ load_dotenv()
 
 MANGAPI_URL = os.environ.get("MANGAPI_URL")
 
+BATO_IMAGES_QUERY = """
+    query Images($getChapterNodeId: ID!) {
+      get_chapterNode(id: $getChapterNodeId) {
+        data {
+          imageFile {
+            urlList
+          }
+        }
+      }
+    }
+"""
+
 def search(title, source):
     try:
         source = int(source)
@@ -98,4 +110,71 @@ def get_chapters(id: str, source: int):
 
         case _:
             raise ValueError(f"Invalid source: {source}. Please choose a valid source.")
+
+
+def get_chapter_pages(chapter_id: str, source: int):
+    try:
+        source = int(source)
+    except:
+        raise ValueError(f"Invalid source: {source}. Please choose a valid source.")
+
+    if not chapter_id:
+        raise ValueError("chapter_id cannot be empty")
+
+    # MangaDex
+    if source == 0:
+        response = req.get(f"https://api.mangadex.org/at-home/server/{chapter_id}", timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        base_url = data.get("baseUrl")
+        chapter_data = data.get("chapter", {})
+        hash_url = chapter_data.get("hash")
+        images = chapter_data.get("data", [])
+        if not base_url or not hash_url or not images:
+            raise Exception("No pages found for this chapter")
+        return {"pages": [{"url": f"{base_url}/data/{hash_url}/{img}", "referer": ""} for img in images]}
+
+    # Mangahere
+    if source == 7:
+        response = req.get(f"{MANGAPI_URL}/manga/mangahere/read", params={"chapterId": chapter_id}, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        pages = []
+        for page in data:
+            image_url = page.get("img")
+            referer = page.get("headerForImage", {}).get("Referer", "")
+            if image_url:
+                pages.append({"url": image_url, "referer": referer})
+        if not pages:
+            raise Exception("No pages found for this chapter")
+        return {"pages": pages}
+
+    # Mangapill
+    if source == 8:
+        response = req.get(f"{MANGAPI_URL}/manga/mangapill/read", params={"chapterId": chapter_id}, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+        pages = [{"url": page.get("img"), "referer": "https://mangapill.com"} for page in data if page.get("img")]
+        if not pages:
+            raise Exception("No pages found for this chapter")
+        return {"pages": pages}
+
+    # Bato
+    if source == 9:
+        response = req.post(
+            "https://bato.si/ap2/",
+            json={
+                "query": BATO_IMAGES_QUERY,
+                "variables": {"getChapterNodeId": chapter_id, "operationName": "Images"},
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        images = data.get("data", {}).get("get_chapterNode", {}).get("data", {}).get("imageFile", {}).get("urlList", [])
+        if not images:
+            raise Exception("No pages found for this chapter")
+        return {"pages": [{"url": img, "referer": ""} for img in images]}
+
+    raise ValueError("Reader mode is currently supported for sources: 0, 7, 8, 9")
         
