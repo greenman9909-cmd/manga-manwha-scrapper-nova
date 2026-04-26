@@ -2,12 +2,15 @@ import os
 from typing import Any, Dict, List
 
 import requests
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 
 app = FastAPI(title="Streaming Nova Manga API", version="1.0.0")
+
+# All endpoints exposed under /api/* so Vercel routes work correctly
+api = APIRouter(prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
@@ -155,18 +158,18 @@ def root() -> str:
 """
 
 
-@app.get("/health")
+@api.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "healthy"}
 
 
-@app.get("/status")
+@api.get("/status")
 def status() -> Dict[str, Dict[str, str]]:
     # Lightweight source status indicator.
     return {"status": {k: "ok" for k in SOURCE_URLS.keys()}}
 
 
-@app.get("/search")
+@api.get("/search")
 def search(title: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
     try:
         if source == "0":
@@ -193,7 +196,7 @@ def search(title: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
                 if not cover_name:
                     continue
                 cover = (
-                    f"/proxy-image?url=https://uploads.mangadex.org/covers/"
+                    f"/api/proxy-image?url=https://uploads.mangadex.org/covers/"
                     f"{comic_id}/{cover_name}.256.jpg&hd="
                 )
                 items[str(idx)] = {
@@ -216,7 +219,7 @@ def search(title: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
                 {
                     "id": x.get("id"),
                     "title": {"en": x.get("title", "Unknown")},
-                    "cover_art": f"/proxy-image?url={x.get('image','')}&hd={x.get('headerForImage','')}",
+                    "cover_art": f"/api/proxy-image?url={x.get('image','')}&hd={x.get('headerForImage','')}",
                     "availableLanguages": ["en"],
                 }
                 for x in data
@@ -233,7 +236,7 @@ def search(title: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
                 {
                     "id": x.get("id"),
                     "title": {"en": x.get("title", "Unknown")},
-                    "cover_art": f"/proxy-image?url={x.get('image','')}&hd=https://mangapill.com",
+                    "cover_art": f"/api/proxy-image?url={x.get('image','')}&hd=https://mangapill.com",
                     "availableLanguages": ["en"],
                 }
                 for x in data
@@ -274,7 +277,7 @@ def search(title: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/chapters")
+@api.get("/chapters")
 def chapters(id: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
     try:
         if source == "0":
@@ -364,7 +367,7 @@ def chapters(id: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/read/chapter")
+@api.get("/read/chapter")
 def read_chapter(chapter_id: str = Query(...), source: str = Query(...)) -> Dict[str, Any]:
     try:
         if source == "0":
@@ -437,7 +440,7 @@ def read_chapter(chapter_id: str = Query(...), source: str = Query(...)) -> Dict
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/proxy-image")
+@api.get("/proxy-image")
 def proxy_image(url: str = Query(...), hd: str = Query("")) -> StreamingResponse:
     try:
         headers = {"Referer": hd} if hd else None
@@ -449,3 +452,6 @@ def proxy_image(url: str = Query(...), hd: str = Query("")) -> StreamingResponse
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Proxy image failed: {e}")
+
+
+app.include_router(api)
