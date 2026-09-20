@@ -246,3 +246,10 @@ Created by [Infinity](https://github.com/serplay) — feel free to reach out or 
 [![Neighborhood Badge](https://images.fillout.com/orgid-81/flowpublicid-2d6RsxRU3ius/widgetid-gHXJ/wLL8YM3u5TEHNwmmey7cHo/summer25.png?a=4hit9PajYRUKJJYwW78gvU)](http://neighborhood.hackclub.com/)
 
 ---
+
+
+---
+
+### Support
+
+If you enjoy this project and want to support more builds, you can optionally [support me on Ko-fi](https://ko-fi.com/yorusayano).
